@@ -1,0 +1,10 @@
+# Golang build binary
+backend/hn-gateway
+
+# Environment files
+**/.env
+**/.env.local
+
+# OS / Editor junk files
+.DS_Store
+Thumbs.db
