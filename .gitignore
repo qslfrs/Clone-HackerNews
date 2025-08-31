@@ -1,10 +1,13 @@
-# Golang build binary
 backend/hn-gateway
 
-# Environment files
+backend/node_modules/
+
+frontend/node_modules/
+
+frontend/dist/
+
 **/.env
 **/.env.local
 
-# OS / Editor junk files
 .DS_Store
 Thumbs.db
