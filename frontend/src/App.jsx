@@ -39,10 +39,10 @@ export default function App() {
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
   return (
-    <div className="min-h-screen px-10 sm:px-12 lg:px-14 p-10 bg-blue-500">
-      <div className="app-container max-w-3xl mx-auto pt-6">
+    <div className="min-h-screen px-10 sm:px-12 lg:px-14 p-10  ">
+      <div className="app-container max-w-3xl mx-auto pt-6 ">
         <header className="mb-6">
-          <h1 className="text-3xl font-bold ">Hacker News — Clone</h1>
+          <h1 className="text-3xl font-bold">Hacker News — Clone</h1>
         </header>
 
         <main>
@@ -83,11 +83,11 @@ export default function App() {
           ) : error ? (
             <div className="p-4 bg-red-50 text-red-700 rounded">Error: {error}</div>
           ) : (
-            <ul className="space-y-3">
+            <ul className="space-y-3 ">
               {items.map((it) => (
                 <li
                   key={it.id}
-                  className="p-4 bg-white rounded shadow-sm max-w-2xl mx-auto"
+                  className="p-4 bg-black rounded shadow-sm max-w-2xl mx-auto"
                 >
                   <a
                     className="text-lg font-medium text-sky-700 hover:underline"
