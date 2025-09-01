@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 func GetTopStoriesHandler(c *gin.Context, client *HNClient) {
 	pageStr := c.DefaultQuery("page", "1")
 	limitStr := c.DefaultQuery("limit", "20")
+	typeFilter := c.Query("type")
 
 	page, _ := strconv.Atoi(pageStr)
 	limit, _ := strconv.Atoi(limitStr)
@@ -24,7 +26,7 @@ func GetTopStoriesHandler(c *gin.Context, client *HNClient) {
 		limit = 20
 	}
 
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
 	defer cancel()
 
 	ids, err := client.GetTopStoryIDs(ctx)
@@ -33,25 +35,13 @@ func GetTopStoriesHandler(c *gin.Context, client *HNClient) {
 		return
 	}
 
-	// calculate slice for pagination
-	start := (page - 1) * limit
-	if start >= len(ids) {
-		c.JSON(http.StatusOK, gin.H{"items": []interface{}{}, "total": len(ids)})
-		return
-	}
-	end := start + limit
-	if end > len(ids) {
-		end = len(ids)
-	}
-	pageIDs := ids[start:end]
-
 	// concurrency limit semaphore
-	sem := make(chan struct{}, 10) // max 10 concurrent item fetches
+	sem := make(chan struct{}, 10) // batasi 10 concurrent fetch
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
-	items := make([]map[string]interface{}, 0, len(pageIDs))
+	items := make([]map[string]interface{}, 0, len(ids))
 
-	for _, id := range pageIDs {
+	for _, id := range ids {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
@@ -70,10 +60,9 @@ func GetTopStoriesHandler(c *gin.Context, client *HNClient) {
 
 			it, err := client.GetItem(ctx, id)
 			if err != nil {
-				// skip failed item but continue others
 				return
 			}
-			CacheSet(key, it, 5*time.Minute)
+			CacheSet(key, it, 10*time.Minute)
 			mu.Lock()
 			items = append(items, it)
 			mu.Unlock()
@@ -81,22 +70,41 @@ func GetTopStoriesHandler(c *gin.Context, client *HNClient) {
 	}
 	wg.Wait()
 
-	// keep original order according to pageIDs
-	// build map for quick lookup
-	orderMap := make(map[int]map[string]interface{}, len(items))
-	for _, it := range items {
-		if idf, ok := it["id"].(float64); ok {
-			orderMap[int(idf)] = it
+	// filter berdasarkan type jika diberikan
+	filtered := items
+	if typeFilter != "" {
+		tmp := make([]map[string]interface{}, 0, len(items))
+		for _, it := range items {
+			if t, ok := it["type"].(string); ok {
+				if t == typeFilter {
+					tmp = append(tmp, it)
+				}
+			}
 		}
-	}
-	ordered := make([]map[string]interface{}, 0, len(pageIDs))
-	for _, id := range pageIDs {
-		if it, ok := orderMap[id]; ok {
-			ordered = append(ordered, it)
-		}
+		filtered = tmp
 	}
 
-	c.JSON(http.StatusOK, gin.H{"items": ordered, "total": len(ids)})
+	// urutkan semua item dari terbaru ke terlama
+	sort.Slice(filtered, func(i, j int) bool {
+		ti, _ := filtered[i]["time"].(float64)
+		tj, _ := filtered[j]["time"].(float64)
+		return ti > tj
+	})
+
+	// pagination setelah sorting/filter
+	total := len(filtered)
+	start := (page - 1) * limit
+	if start >= total {
+		c.JSON(http.StatusOK, gin.H{"items": []interface{}{}, "total": total})
+		return
+	}
+	end := start + limit
+	if end > total {
+		end = total
+	}
+	pagedItems := filtered[start:end]
+
+	c.JSON(http.StatusOK, gin.H{"items": pagedItems, "total": len(items)})
 }
 
 // GET /api/item/:id
